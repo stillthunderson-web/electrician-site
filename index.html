@@ -518,11 +518,6 @@
           <input class="calc-input" id="calc-switches" name="switches" type="number" inputmode="numeric" min="0" step="1">
         </div>
 
-        <div class="calc-field">
-          <label class="calc-label" for="calc-splits">Количество сплит-систем</label>
-          <input class="calc-input" id="calc-splits" name="splits" type="number" inputmode="numeric" min="0" step="1">
-        </div>
-
         <fieldset class="calc-group">
           <legend>Электрооборудование для подключения</legend>
           <ul class="calc-list">
@@ -607,33 +602,129 @@
 
 <script>
 (function () {
-  var fields = [
-    document.getElementById('calc-area'),
-    document.getElementById('calc-sockets'),
-    document.getElementById('calc-switches'),
-    document.getElementById('calc-splits')
-  ];
-  var checkboxes = document.querySelectorAll('.calc-checkbox');
-  var button = document.getElementById('calc-submit');
-  var result = document.getElementById('calc-result');
+  // ===== ЦЕНЫ: правьте значения прямо здесь =====
+  const PRICES = {
+    // Цена за кв.м (режим «только площадь»)
+    perM2: [
+      { min: 1,  max: 40,  price: 1500 },  // 1–40 кв.м
+      { min: 41, max: 50,  price: 1400 },  // 41–50 кв.м
+      { min: 51, max: 60,  price: 1300 },  // 51–60 кв.м
+      { min: 61, max: 70,  price: 1200 },  // 61–70 кв.м
+      { min: 71, max: Infinity, price: 1100 }  // 71+ кв.м
+    ],
+    socketPrice: 300,      // цена за 1 розетку (работа)
+    switchPrice: 300,      // цена за 1 выключатель (работа)
+    boxPrice: 500,         // цена за 1 коробку (работа)
+    cablePerMeter: 60,     // монтаж провода, руб/метр (работа)
+    strobePerMeter: 200,   // штробление, руб/метр (работа)
+    panelPrice: 12000      // щит, фиксированная сумма (работа)
+  };
 
-  function isFilled(input) {
-    var value = parseFloat(input.value);
-    return !isNaN(value) && value > 0;
+  const areaInput = document.getElementById('calc-area');
+  const socketInput = document.getElementById('calc-sockets');
+  const switchInput = document.getElementById('calc-switches');
+  const checkboxes = document.querySelectorAll('.calc-checkbox');
+  const button = document.getElementById('calc-submit');
+  const result = document.getElementById('calc-result');
+
+  // Разделитель тысяч без зависимости от локали: 40100 -> «40 100»
+  function formatNumber(value) {
+    return String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   }
 
-  function hasCheckedBox() {
-    return Array.prototype.some.call(checkboxes, function (box) {
+  function toNumber(input) {
+    const value = parseFloat(input.value);
+    return isNaN(value) || value < 0 ? 0 : value;
+  }
+
+  function countChecked() {
+    return Array.prototype.filter.call(checkboxes, function (box) {
       return box.checked;
+    }).length;
+  }
+
+  // Подбор цены за кв.м: берём строку с наибольшим min, не превышающим площадь
+  function pricePerM2(area) {
+    let price = PRICES.perM2[0].price;
+    for (let i = 0; i < PRICES.perM2.length; i++) {
+      if (area >= PRICES.perM2[i].min) price = PRICES.perM2[i].price;
+    }
+    return price;
+  }
+
+  // ===== Режим «по кв.м»: стоимость = площадь × цена за кв.м =====
+  function calculateByArea(area, lines) {
+    const rate = pricePerM2(area);
+    const sum = area * rate;
+    lines.push('Площадь × цена за кв.м: ' + formatNumber(area) + ' кв. м × ' + formatNumber(rate) + ' ₽ = ' + formatNumber(sum) + ' ₽');
+    return sum;
+  }
+
+  // ===== Режим «по наполнению» =====
+  function calculateByContent(area, sockets, switches, checkedCount, lines) {
+    // 1) Розетки: количество × цена за розетку
+    const socketsSum = sockets * PRICES.socketPrice;
+    lines.push('Розетки: ' + formatNumber(sockets) + ' × ' + formatNumber(PRICES.socketPrice) + ' ₽ = ' + formatNumber(socketsSum) + ' ₽');
+
+    // 2) Выключатели: количество × цена за выключатель
+    const switchesSum = switches * PRICES.switchPrice;
+    lines.push('Выключатели: ' + formatNumber(switches) + ' × ' + formatNumber(PRICES.switchPrice) + ' ₽ = ' + formatNumber(switchesSum) + ' ₽');
+
+    // 3) Коробки: (розетки − галочки − 5 + выключатели / 2); если меньше нуля — выключатели / 2; округление вверх
+    let boxes = sockets - checkedCount - 5 + switches / 2;
+    if (boxes < 0) boxes = switches / 2;
+    boxes = Math.ceil(boxes);
+    const boxesSum = boxes * PRICES.boxPrice;
+    lines.push('Коробки: ' + formatNumber(boxes) + ' × ' + formatNumber(PRICES.boxPrice) + ' ₽ = ' + formatNumber(boxesSum) + ' ₽');
+
+    // 4) Монтаж провода: 50 м на каждые 10 кв.м, округление вверх (1–10 → 50 м, 11–20 → 100 м, 71–80 → 400 м)
+    const cableMeters = 50 * Math.ceil(area / 10);
+    const cableSum = cableMeters * PRICES.cablePerMeter;
+    lines.push('Провод: ' + formatNumber(cableMeters) + ' м × ' + formatNumber(PRICES.cablePerMeter) + ' ₽ = ' + formatNumber(cableSum) + ' ₽');
+
+    // 5) Штробление: 1 м на каждую розетку, выключатель и единицу техники
+    const strobeMeters = 1 * (sockets + switches + checkedCount);
+    const strobeSum = strobeMeters * PRICES.strobePerMeter;
+    lines.push('Штробление: ' + formatNumber(strobeMeters) + ' м × ' + formatNumber(PRICES.strobePerMeter) + ' ₽ = ' + formatNumber(strobeSum) + ' ₽');
+
+    // 6) Щит: фиксированная сумма, добавляется всегда
+    lines.push('Щит: ' + formatNumber(PRICES.panelPrice) + ' ₽');
+
+    return socketsSum + switchesSum + boxesSum + cableSum + strobeSum + PRICES.panelPrice;
+  }
+
+  function calculate() {
+    const area = toNumber(areaInput);
+    const sockets = toNumber(socketInput);
+    const switches = toNumber(switchInput);
+    const checkedCount = countChecked();
+
+    // Если заполнена только площадь — режим «по кв.м», иначе «по наполнению»
+    const onlyArea = sockets === 0 && switches === 0 && checkedCount === 0;
+    const lines = [];
+    const rawTotal = onlyArea
+      ? calculateByArea(area, lines)
+      : calculateByContent(area, sockets, switches, checkedCount, lines);
+
+    // Округление итога до сотен
+    const total = Math.round(rawTotal / 100) * 100;
+    return { total: total, lines: lines };
+  }
+
+  function render(lines) {
+    result.textContent = '';
+    lines.forEach(function (line, index) {
+      if (index > 0) result.appendChild(document.createElement('br'));
+      result.appendChild(document.createTextNode(line));
     });
   }
 
+  // Кнопка активна ТОЛЬКО при заполненной площади (значение > 0)
   function updateButtonState() {
-    var hasNumber = fields.some(isFilled);
-    button.disabled = !(hasNumber || hasCheckedBox());
+    button.disabled = !(toNumber(areaInput) > 0);
   }
 
-  fields.forEach(function (input) {
+  [areaInput, socketInput, switchInput].forEach(function (input) {
     input.addEventListener('input', updateButtonState);
     input.addEventListener('change', updateButtonState);
   });
@@ -643,8 +734,8 @@
   });
 
   button.addEventListener('click', function () {
-    // TODO: логика расчёта. Если заполнена только площадь — цена за кв.м. Если заполнены другие поля — расчёт количества кабеля.
-    result.textContent = 'Здесь будет расчёт. Логика появится позже';
+    const calculation = calculate();
+    render(['Итоговая стоимость: ' + formatNumber(calculation.total) + ' ₽', ''].concat(calculation.lines));
   });
 
   document.getElementById('calc-form').addEventListener('submit', function (event) {
