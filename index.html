@@ -208,6 +208,37 @@
     border-color: var(--blue-dark);
   }
 
+  .gallery {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 18px;
+  }
+
+  .gallery figure {
+    flex: 1 1 260px;
+    max-width: 340px;
+    margin: 0;
+  }
+
+  .gallery img {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    background-color: #FFFFFF;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+
+  .gallery figcaption {
+    margin-top: 10px;
+    font-size: 18px;
+    line-height: 1.5;
+    color: var(--muted);
+    text-align: center;
+  }
+
   footer {
     margin: 8px 0 0;
     text-align: center;
@@ -270,6 +301,15 @@
     .contact--phone {
       font-size: 24px;
     }
+
+    .gallery {
+      gap: 24px;
+    }
+
+    .gallery figure {
+      flex: 1 1 300px;
+      max-width: 340px;
+    }
   }
 </style>
 </head>
@@ -315,6 +355,16 @@
         <a class="contact" href="https://t.me/kozlovdmb" target="_blank" rel="noopener">Telegram</a>
         <a class="contact" href="https://vk.com/id851594899" target="_blank" rel="noopener">ВК</a>
       </address>
+    </section>
+
+    <section aria-labelledby="gallery-title">
+      <h2 id="gallery-title">Галерея</h2>
+      <div class="gallery">
+        <figure>
+          <img src="images/morda.jpg" width="384" height="512" loading="lazy" decoding="async" alt="Дмитрий Козлов в защитных очках с монтажным инструментом на объекте, разводка кабеля по потолку">
+          <figcaption>На объекте: разводка кабеля по потолку.</figcaption>
+        </figure>
+      </div>
     </section>
 
   </main>
